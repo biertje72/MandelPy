@@ -1,0 +1,251 @@
+#install OpenCV for writing images http://docs.opencv.org/trunk/d5/de5/tutorial_py_setup_in_windows.html
+#en dan http://www.xavierdupre.fr/blog/2016-03-30_nojs.html
+
+
+
+#based on http://jonisalonen.com/2013/lets-draw-the-mandelbrot-set/
+
+import pygame
+import random
+import time
+    
+    
+# Window dimensions
+width = 1200
+height = 1200
+aspectratio = width/height
+
+
+screen = pygame.display.set_mode((width, height))
+
+running = True
+(MODE_ANIMATE_TO_1POINT, MODE_NAVIGATE, MODE_LAST) = range(3)
+mode = MODE_ANIMATE_TO_1POINT
+
+
+
+
+maxIters = 100
+targetIters = maxIters
+
+displayUpdateEveryXrows = 30
+
+# Set initial values center, zoom, rotate
+zoom = 0.6
+zoomFactor = 1.05
+rotate = 0.0
+
+filenamebase = "c:/temp/f100_1.05_"
+
+#c_re_cent, c_im_cent = -1.2890624999999998, 0.44140625
+#c_re_cent, c_im_cent  = -0.7453, 0.1127  # see "c:/temp/50_1.15_"
+#c_re_cent, c_im_cent  = -0.74, 0.18  # see  "c:/temp/a50_1.15_"
+#c_re_cent, c_im_cent  = 0.272, 0.005 # see "c:/temp/b50_1.15_"
+#c_re_cent, c_im_cent  =  -0.235125, 0.827215 # see "c:/temp/c50_1.15_"
+#c_re_cent, c_im_cent  =  -0.235125, 0.827215 # see "c:/temp/c100_1.10_"
+#c_re_cent, c_im_cent  =  -0.749985953594, -0.0303854999362 # see
+#c_re_cent, c_im_cent  =  -1.25564015928, 0.383339105504 # see  "c:/temp/d100_1.10_"
+#c_re_cent, c_im_cent  =  -1.78509077549, -4.39147173869e-05 # see  "c:/temp/e100_1.05_"
+c_re_cent, c_im_cent  =  0.255168297247, 0.000687076995848 #see "c:/temp/f100_1.05_"
+
+def screenPosToC (x, y):
+    c_re_min= c_re_cent - 2.0/zoom
+    c_re_max = c_re_cent + 2.0/zoom
+    c_im_min= c_im_cent - 2.0/aspectratio/zoom
+    c_im_max= c_im_cent + 2.0/aspectratio/zoom
+    c_re = c_re_min + float(x)/width * (c_re_max - c_re_min)
+    c_im = c_im_min + float(y)/height * (c_im_max - c_im_min)
+    return c_re, c_im
+
+def drawCurrentFrame():
+    global running
+    global maxIters
+    
+    lowestIters = maxIters
+    highestIters = 0
+    maxMinTargetIters = maxIters-targetIters #is same as lowest from last frame :)
+
+    redStepPerIter = 255.0/targetIters/1.4;
+    greenStepPerIter = 255.0/targetIters/1;
+    blueStepPerIter = 255.0/targetIters/1.1;
+
+    # Map to complex coords
+    c_re_min= c_re_cent - 2.0/zoom
+    c_re_max = c_re_cent + 2.0/zoom
+    c_im_min= c_im_cent - 2.0/aspectratio/zoom
+    c_im_max= c_im_cent + 2.0/aspectratio/zoom
+
+    c_re_iets = width/(c_re_max-c_re_min)
+    c_re_step = (c_re_max - c_re_min) / width
+    c_im_iets = height/(c_im_max-c_im_min)
+    c_im_step = (c_im_max - c_im_min) / height;
+
+#    tmpMinDist = 100000000000000000
+#    tmpMaxDist = 0
+    c_im = c_im_min
+    while c_im < c_im_max:
+        c_re = c_re_min
+        while c_re < c_re_max:
+            x =  y = 0.0;
+            iteration = 0;
+            #xSq = x*x;
+            xSq = 0
+            #ySq = y*y;
+            ySq = 0
+            while xSq + ySq <= 4.0 and iteration < maxIters: #the 4 is a global max distance that is interesting for mandelbrot
+                x_new = xSq - ySq + c_re
+                y = 2*x*y + c_im
+                x = x_new
+                xSq = x*x;
+                ySq = y*y;
+                iteration += 1
+                
+            # Scale to screenposition and color that pixel
+            row = int((c_im - c_im_min)*c_im_iets)
+            col =  int((c_re - c_re_min)*c_re_iets)
+            
+            if iteration < maxIters:
+                # Point is outside the set, give it a nice color based on iteration
+                colIdxBasedOnIter = float(iteration % targetIters);
+
+                # Experiment
+                tmpDist = xSq + ySq - 4.0 # how far from the 4 were we with this pixel? Measured; max 30 on average
+                # Now use the dist to change color
+#                tmpMinDist = min(tmpDist,tmpMinDist)
+#                tmpMaxDist = max(tmpDist,tmpMaxDist)
+                colIdxBasedOnIter += tmpDist/30.0
+                #colIdxBasedOnIter = iteration-maxMinTargetIters;
+                red = int(redStepPerIter * colIdxBasedOnIter);
+                green = int(greenStepPerIter * colIdxBasedOnIter);
+                blue = int(blueStepPerIter * colIdxBasedOnIter);
+                screen.set_at((col, row), (red, green, blue))
+            else:
+                # Point is inside the set, color it black
+                # Inside set means, stays withing boundaries and did not spin out of control
+                screen.set_at((col, row), (0, 0, 0))
+
+            #update iter tracking
+            lowestIters = min (lowestIters, iteration)
+            highestIters = max (highestIters, iteration)
+            
+            c_re += c_re_step
+        c_im += c_im_step
+
+        # Time to update the window and check on inputs  
+        if row%displayUpdateEveryXrows == 0:
+            pygame.display.flip() #can be update() ?
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    running = False
+
+    print "-------------------------"
+    print "-------------------------"
+#    print "tmpMinDist, tmpMaxDist:", tmpMinDist, tmpMaxDist
+    print "lowest iters, maxIters, targetIters:", lowestIters, maxIters, targetIters
+    maxIters = lowestIters + targetIters
+    print "new maxIters: ", maxIters
+
+    return
+#end drawCurrentFrame()
+
+def userNavigates():
+    done = False;
+    global  c_re_cent
+    global  c_im_cent
+    global zoom
+    makingRectangle = False
+    
+    copyOfFractal = screen.copy()
+    rect = pygame.Rect(0,0,1,1)
+    while not done:       
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False  
+
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                makingRectangle = True;
+                startX, startY = event.pos
+                pygame.mouse.set_visible(True)
+                
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1 and makingRectangle == True:
+                makingRectangle = False;
+                endX, endY = event.pos
+                extend = max (abs(endX-startX), abs(endY-startY))
+                pygame.mouse.set_visible(True)
+
+            elif event.type == pygame.MOUSEMOTION and event.buttons[0] == True and makingRectangle == True:
+                screen.blit(copyOfFractal, (0,0)) # First show a copy of the fractal
+                # Then draw the rect
+                endX, endY = event.pos
+                extend = max (abs(endX-startX), abs(endY-startY))
+                rect.center = (startX, startY)
+                rect.width= extend*2
+                rect.height = extend*2/aspectratio
+                #pygame.draw.rect(screen, (255, 255, 255), (startX, startY, endX-startX, endY-startY), 1)
+                pygame.draw.rect(screen, (255, 255, 255), rect, 1)
+                pygame.display.update() # Then update the screen
+
+                
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    print "##"
+                    print "old center: ", c_re_cent, c_im_cent
+                    # set new center
+                    c_re_new, c_im_new = screenPosToC(rect.centerx, rect.centery)
+                    c_re_cent = c_re_new
+                    c_im_cent = c_im_new
+                    print "new center: ", c_re_cent, c_im_cent
+
+                    # set new zoom
+                    x_left = rect.left
+                    x_right = rect.right
+                    # convert screen to complex
+                    c_re_left, y = screenPosToC(x_left, 0)
+                    c_re_right, y = screenPosToC(x_right, 0)
+                    widthInC = c_re_right-c_re_left
+
+                    print 'old zoom:', zoom
+                    zoom = 4/widthInC
+                    print 'new zoom:', zoom
+                    print 'confirmed!'
+                    done = True
+                    
+def main():
+
+    if mode == MODE_ANIMATE_TO_1POINT:
+        global running
+        global zoom
+        frame = 1
+        while running:    
+            drawCurrentFrame()
+            print 'saving to', filenamebase + str(frame) + ".jpeg"
+            pygame.image.save(screen, filenamebase + str(frame) + ".jpeg")
+            frame +=1
+            zoom *= zoomFactor
+        
+            # Intermediate loop, wait for user to do next step
+            while False and running:
+                Mouse_x, Mouse_y = pygame.mouse.get_pos()
+                print screenPosToC(Mouse_x, Mouse_y)
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        pygame.quit()
+                        running = False
+                        
+    elif mode == MODE_NAVIGATE:
+        global running
+        global zoom
+
+        while running:    
+            drawCurrentFrame()
+            userNavigates()            
+
+
+        
+if __name__ == "__main__":
+    main()
+        
+
+
+
